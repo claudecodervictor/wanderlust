@@ -2,10 +2,11 @@ import type { LocationGuide } from "./types";
 import { buildMockGuide } from "./mockData";
 
 /**
- * Toggle this to `false` once the real z.ai-backed endpoint is wired up.
- * While true, we return mocked data so the UI is fully usable immediately.
+ * Live by default: searches hit `/api/guide`, which proxies the visitor's z.ai
+ * key to GLM and returns a real, location-specific guide. Flip to `true` to
+ * fall back to mocked data (e.g. for offline UI work).
  */
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export type FetchGuideArgs = {
   location: string;
@@ -50,10 +51,11 @@ export async function fetchGuide({
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error("That z.ai key was rejected. Double-check it and retry.");
-    }
-    throw new Error(`Lookup failed (${res.status}). Please try again.`);
+    const message = await res
+      .json()
+      .then((data) => data?.error as string | undefined)
+      .catch(() => undefined);
+    throw new Error(message ?? `Lookup failed (${res.status}). Please try again.`);
   }
 
   return (await res.json()) as LocationGuide;
