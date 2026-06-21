@@ -12,7 +12,9 @@ import type { LocationGuide } from "@/lib/types";
 // z.ai is OpenAI-compatible. Endpoint + model are overridable via env.
 const ZAI_URL =
   process.env.ZAI_BASE_URL ?? "https://api.z.ai/api/paas/v4/chat/completions";
-const ZAI_MODEL = process.env.ZAI_MODEL ?? "glm-4.6";
+// glm-4.5-flash is z.ai's free model (no balance required). Override with
+// ZAI_MODEL=glm-4.6 (or another paid model) once the key has credit.
+const ZAI_MODEL = process.env.ZAI_MODEL ?? "glm-4.5-flash";
 
 export const runtime = "nodejs";
 // Generating a full guide can take a little while — give it room.
@@ -123,6 +125,13 @@ export async function POST(req: Request) {
       );
     }
     const detail = await upstream.text().catch(() => "");
+    // 1113 = insufficient balance / no resource package on the z.ai account.
+    if (upstream.status === 429 || detail.includes("1113")) {
+      return badRequest(
+        "Your z.ai account is out of credit for this model. Add credit, or set ZAI_MODEL to a free model like glm-4.5-flash.",
+        429,
+      );
+    }
     return badRequest(
       `z.ai request failed (${upstream.status}).${detail ? ` ${detail.slice(0, 200)}` : ""}`,
       502,
